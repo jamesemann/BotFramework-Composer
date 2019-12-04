@@ -4,7 +4,6 @@
 import { ISettingManager } from '../settings';
 import { DefaultSettingManager } from '../settings/defaultSettingManager';
 import { IBotConnector } from '../connector';
-import { CSharpBotConnector } from '../connector/csharpBotConnector';
 
 import { IEnvironmentConfig, IEnvironment } from '.';
 import { ZammoBotConnector } from '../../_zammo/ZammoBotConnector';
