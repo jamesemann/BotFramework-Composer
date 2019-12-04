@@ -7,18 +7,20 @@ import { IBotConnector } from '../connector';
 import { CSharpBotConnector } from '../connector/csharpBotConnector';
 
 import { IEnvironmentConfig, IEnvironment } from '.';
+import { ZammoBotConnector } from '../../_zammo/ZammoBotConnector';
 
 export class DefaultEnvironment implements IEnvironment {
   private config: IEnvironmentConfig;
   private settingManager: DefaultSettingManager;
-  private botConnector: CSharpBotConnector;
+  private botConnector: IBotConnector;
   private defaultSlot = '';
   private slots: string[] = [''];
 
   public constructor(config: IEnvironmentConfig) {
     this.config = config;
     this.settingManager = new DefaultSettingManager(this.config.basePath);
-    this.botConnector = new CSharpBotConnector(this.config.adminEndpoint, this.config.endpoint);
+    //this.botConnector = new CSharpBotConnector(this.config.adminEndpoint, this.config.endpoint);
+    this.botConnector = new ZammoBotConnector(this.config.adminEndpoint, this.config.endpoint);
   }
 
   public getEnvironmentName(_: string): string | undefined {
