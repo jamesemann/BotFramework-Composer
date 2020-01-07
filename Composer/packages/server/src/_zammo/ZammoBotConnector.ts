@@ -3,27 +3,29 @@
 
 import fs from 'fs';
 import Path from 'path';
-
-import archiver from 'archiver';
-
 import { Connection, Request, TYPES } from 'tedious';
 
 import { BotProjectService } from '../services/project';
 import { DialogSetting } from '../models/bot/interface';
 
-import { BotConfig, BotEnvironments, BotStatus, IBotConnector, IPublishHistory } from '../models/connector';
+import {
+  BotStatus,
+  CSharpBotConnector,
+  IBotConnector,
+  BotEnvironments,
+  IPublishHistory,
+  BotConfig,
+} from '../models/connector';
 
 export class ZammoBotConnector implements IBotConnector {
-  private endpoint: string;
+  wrapped: CSharpBotConnector;
+
   constructor(adminEndpoint: string, endpoint: string) {
-    this.endpoint = endpoint;
+    this.wrapped = new CSharpBotConnector(adminEndpoint, endpoint);
+    //super(adminEndpoint, endpoint);
   }
 
   public status: BotStatus = BotStatus.NotConnected;
-
-  connect = async (_: BotEnvironments, __: string) => {
-    return `${this.endpoint}/api/messages`;
-  };
 
   sync = async (config: DialogSetting) => {
     const cfg = {
@@ -45,23 +47,19 @@ export class ZammoBotConnector implements IBotConnector {
     };
     const connection = new Connection(cfg);
     connection.on('connect', async err => {
-      console.log(err);
-      // If no error, then good to proceed.
-      console.log('Connected');
       const currentProject = BotProjectService.getCurrentBotProject();
 
       if (currentProject === undefined) {
         throw new Error('no project is opened, nothing to sync');
       }
       const dir = Path.join(currentProject.dataDir);
-      // const luisConfig = currentProject.luPublisher.getLuisConfig();
+
       await this.archiveDirectory(dir, './tmp.zip');
       const content = fs.readFileSync('./tmp.zip');
       const base64definition = new Buffer(content).toString('base64');
 
-      // do the do
       const request = new Request(
-        'INSERT INTO ComposerDefinitions (Name,Base64Definition) VALUES (@name, @base64Definition)',
+        'INSERT INTO ConversationModuleDefinitions (Name,Title,Base64Definition) VALUES (@name,@name,@base64Definition)',
         function(err) {
           if (err) {
             console.log(err);
@@ -70,44 +68,31 @@ export class ZammoBotConnector implements IBotConnector {
       );
       request.addParameter('name', TYPES.NVarChar, currentProject.name);
       request.addParameter('base64Definition', TYPES.NVarChar, base64definition);
-
       connection.execSql(request);
     });
+
+    // after storing in zammo db, publish to local test instance
+    // note - we may want to add some conditions around this
+    await this.wrapped.sync(config);
+  };
+
+  connect = async (_: BotEnvironments, __: string) => {
+    return this.wrapped.connect(_, __);
   };
 
   archiveDirectory = (src: string, dest: string) => {
-    return new Promise((resolve, reject) => {
-      const archive = archiver('zip');
-      const output = fs.createWriteStream(dest);
-
-      archive.pipe(output);
-      archive.directory(src, false);
-      archive.finalize();
-
-      output.on('close', () => resolve(archive));
-      archive.on('error', err => reject(err));
-    });
+    return this.wrapped.archiveDirectory(src, dest);
   };
 
   getEditingStatus = (): Promise<boolean> => {
-    return new Promise(resolve => {
-      resolve(true);
-    });
+    return this.wrapped.getEditingStatus();
   };
 
   getPublishHistory = (): Promise<IPublishHistory> => {
-    return new Promise(resolve => {
-      resolve({
-        production: undefined,
-        previousProduction: undefined,
-        integration: undefined,
-      });
-    });
+    return this.wrapped.getPublishHistory();
   };
 
   publish = (_: BotConfig, __: string): Promise<void> => {
-    return new Promise(resolve => {
-      resolve();
-    });
+    return this.wrapped.publish(_, __);
   };
 }
